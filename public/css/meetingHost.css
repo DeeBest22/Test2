@@ -1485,6 +1485,36 @@
       transform: translateY(-1px);
     }
 
+    .setting-group-settings {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .controls-list {
+      margin-top: 12px;
+      padding-left: 16px;
+    }
+
+    .control-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .control-item input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: #3b82f6;
+    }
+
+    .control-item label {
+      color: #e2e8f0;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
     /* Responsive Design */
     @media (max-width: 768px) {
       .participants-panel {
