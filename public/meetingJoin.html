@@ -101,6 +101,10 @@
             <span class="participant-count" id="participantCount">0</span>
           </button>
           
+          <button class="control-btn" id="renameBtn" title="Rename" style="display: none;">
+            ✏️
+          </button>
+          
           <button class="control-btn end-call-btn" id="leaveCallBtn">
             <i class="fas fa-phone-slash"></i>
           </button>
@@ -143,6 +147,27 @@
         </div>
       </div>
     </div>
+
+  <!-- Rename Modal -->
+  <div class="rename-modal" id="renameModal">
+    <div class="rename-modal-content">
+      <div class="rename-modal-header">
+        <h3>Change Display Name</h3>
+        <button class="rename-close-btn" id="renameCloseBtn">×</button>
+      </div>
+      
+      <div class="rename-input-group">
+        <label for="newDisplayName">New Display Name</label>
+        <input type="text" id="newDisplayName" class="rename-input" placeholder="Enter your new name" maxlength="50">
+      </div>
+      
+      <div class="rename-actions">
+        <button class="rename-btn rename-btn-cancel" id="renameCancelBtn">Cancel</button>
+        <button class="rename-btn rename-btn-save" id="renameSaveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
  <div class="aurora-tools-panel-7h2x" id="dimension-tools-overlay-4h9w">
             <div class="eclipse-header-9m2x">Meeting Tools</div>
             
