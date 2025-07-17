@@ -1475,6 +1475,133 @@ body {
   background: #3b82f6;
 }
 
+/* Rename Modal Styles */
+.rename-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.rename-modal.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.rename-modal-content {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  border: 1px solid #374151;
+}
+
+.rename-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.rename-modal-header h3 {
+  color: #f1f5f9;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.rename-close-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.rename-close-btn:hover {
+  color: #f1f5f9;
+  background: rgba(71, 85, 105, 0.5);
+}
+
+.rename-input-group {
+  margin-bottom: 20px;
+}
+
+.rename-input-group label {
+  display: block;
+  color: #e2e8f0;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.rename-input {
+  width: 100%;
+  background: rgba(51, 65, 85, 0.8);
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  border-radius: 8px;
+  color: #f1f5f9;
+  font-size: 14px;
+  padding: 12px 16px;
+  transition: all 0.2s ease;
+}
+
+.rename-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: rgba(51, 65, 85, 1);
+}
+
+.rename-input::placeholder {
+  color: #94a3b8;
+}
+
+.rename-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.rename-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.rename-btn-cancel {
+  background: rgba(71, 85, 105, 0.8);
+  color: #e2e8f0;
+}
+
+.rename-btn-cancel:hover {
+  background: rgba(71, 85, 105, 1);
+}
+
+.rename-btn-save {
+  background: #3b82f6;
+  color: white;
+}
+
+.rename-btn-save:hover {
+  background: #2563eb;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .participants-panel {
@@ -1548,6 +1675,19 @@ body {
   .grid-nav-info {
     font-size: 12px;
     margin: 0 4px;
+  }
+
+  .rename-modal-content {
+    width: 95%;
+    padding: 20px;
+  }
+
+  .rename-actions {
+    flex-direction: column;
+  }
+
+  .rename-btn {
+    width: 100%;
   }
 }
 

@@ -1042,6 +1042,46 @@ export const setupSocketIO = (server) => {
       }
     });
 
+    // New socket event for host to rename themselves
+    socket.on('host-rename-self', (data) => {
+      const { newName } = data;
+      const participantInfo = participants.get(socket.id);
+      
+      if (!participantInfo) return;
+      
+      const meeting = meetings.get(participantInfo.meetingId);
+      if (!meeting) return;
+
+      const participant = meeting.participants.get(socket.id);
+      if (!participant || !participant.isHost) {
+        socket.emit('action-error', { message: 'Only host can use this feature' });
+        return;
+      }
+
+      // Validate name
+      if (!newName || newName.trim().length === 0 || newName.trim().length > 50) {
+        socket.emit('action-error', { message: 'Invalid name. Name must be 1-50 characters.' });
+        return;
+      }
+
+      const result = meeting.renameParticipant(socket.id, newName.trim());
+      if (result) {
+        // Update host name in meeting object
+        meeting.hostName = newName.trim();
+        
+        // Notify all participants about the host name change
+        io.to(participantInfo.meetingId).emit('participant-renamed', {
+          socketId: socket.id,
+          oldName: result.oldName,
+          newName: result.newName,
+          participants: Array.from(meeting.participants.values()),
+          isHost: true
+        });
+
+        console.log(`Host ${socket.id} renamed themselves from ${result.oldName} to ${result.newName} in meeting ${participantInfo.meetingId}`);
+      }
+    });
+
     // New socket event for muting all participants
     socket.on('mute-all-participants', (data) => {
       const { muteAll } = data;
