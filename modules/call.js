@@ -28,7 +28,11 @@ class Meeting {
     this.permissions = {
       chatEnabled: true,
       fileSharing: true,
-      emojiReactions: true
+      emojiReactions: true,
+      allowRename: true,
+      allowUnmute: true,
+      allowHandRaising: true,
+      muteAllParticipants: false
     };
   }
 
@@ -257,6 +261,15 @@ class Meeting {
   // New methods for permission management
   updatePermissions(permissions) {
     this.permissions = { ...this.permissions, ...permissions };
+    
+    // If mute all participants is enabled, mute everyone except host
+    if (permissions.muteAllParticipants) {
+      this.participants.forEach((participant, socketId) => {
+        if (!participant.isHost) {
+          participant.isMuted = true;
+        }
+      });
+    }
   }
 
   getPermissions() {
@@ -266,6 +279,52 @@ class Meeting {
   isParticipantAllowed(socketId) {
     // Allow if meeting is not locked or if participant is already in the meeting
     return !this.isLocked || this.participants.has(socketId);
+  }
+
+  // New method for renaming participants
+  renameParticipant(socketId, newName) {
+    const participant = this.participants.get(socketId);
+    if (participant) {
+      const oldName = participant.name;
+      participant.name = newName;
+      return { oldName, newName };
+    }
+    return null;
+  }
+
+  // Check if participant can rename themselves
+  canRename(socketId) {
+    const participant = this.participants.get(socketId);
+    if (!participant) return false;
+    
+    // Host can always rename themselves
+    if (participant.isHost) return true;
+    
+    // Participants can rename if permission is granted
+    return this.permissions.allowRename;
+  }
+
+  // Check if participant can unmute themselves
+  canUnmute(socketId) {
+    const participant = this.participants.get(socketId);
+    if (!participant) return false;
+    
+    // Host can always unmute
+    if (participant.isHost) return true;
+    
+    // Check if mute all is enabled
+    if (this.permissions.muteAllParticipants) return false;
+    
+    // Participants can unmute if permission is granted
+    return this.permissions.allowUnmute;
+  }
+
+  // Check if participant can raise hand
+  canRaiseHand(socketId) {
+    const participant = this.participants.get(socketId);
+    if (!participant) return false;
+    
+    return this.permissions.allowHandRaising;
   }
 }
 
@@ -495,7 +554,8 @@ export const setupSocketIO = (server) => {
       // Notify all participants about the permission changes
       io.to(participantInfo.meetingId).emit('meeting-permissions-updated', {
         permissions: meeting.getPermissions(),
-        changedBy: meeting.participants.get(socket.id)?.name
+        changedBy: meeting.participants.get(socket.id)?.name,
+        participants: Array.from(meeting.participants.values())
       });
 
       console.log(`Meeting ${participantInfo.meetingId} permissions updated by ${socket.id}:`, permissions);
@@ -641,8 +701,8 @@ export const setupSocketIO = (server) => {
       const meeting = meetings.get(participantInfo.meetingId);
       if (!meeting) return;
 
-      // Check if emoji reactions (hand raising) are enabled
-      if (!meeting.permissions.emojiReactions) {
+      // Check if hand raising is enabled
+      if (!meeting.canRaiseHand(socket.id)) {
         socket.emit('action-error', { message: 'Hand raising is disabled by the host' });
         return;
       }
@@ -875,6 +935,12 @@ export const setupSocketIO = (server) => {
 
       const participant = meeting.participants.get(socket.id);
       if (participant) {
+        // Check if participant can unmute themselves
+        if (isMuted === false && !meeting.canUnmute(socket.id)) {
+          socket.emit('action-error', { message: 'You are not allowed to unmute yourself' });
+          return;
+        }
+        
         participant.isMuted = isMuted;
         
         socket.to(participantInfo.meetingId).emit('participant-audio-changed', {
@@ -904,6 +970,103 @@ export const setupSocketIO = (server) => {
           participants: Array.from(meeting.participants.values())
         });
       }
+    });
+
+    // New socket event for renaming participants
+    socket.on('rename-participant', (data) => {
+      const { newName } = data;
+      const participantInfo = participants.get(socket.id);
+      
+      if (!participantInfo) return;
+      
+      const meeting = meetings.get(participantInfo.meetingId);
+      if (!meeting) return;
+
+      // Check if participant can rename themselves
+      if (!meeting.canRename(socket.id)) {
+        socket.emit('action-error', { message: 'You are not allowed to rename yourself' });
+        return;
+      }
+
+      // Validate name
+      if (!newName || newName.trim().length === 0 || newName.trim().length > 50) {
+        socket.emit('action-error', { message: 'Invalid name. Name must be 1-50 characters.' });
+        return;
+      }
+
+      const result = meeting.renameParticipant(socket.id, newName.trim());
+      if (result) {
+        // Notify all participants about the name change
+        io.to(participantInfo.meetingId).emit('participant-renamed', {
+          socketId: socket.id,
+          oldName: result.oldName,
+          newName: result.newName,
+          participants: Array.from(meeting.participants.values())
+        });
+
+        console.log(`Participant ${socket.id} renamed from ${result.oldName} to ${result.newName} in meeting ${participantInfo.meetingId}`);
+      }
+    });
+
+    // New socket event for host to rename any participant
+    socket.on('host-rename-participant', (data) => {
+      const { targetSocketId, newName } = data;
+      const participantInfo = participants.get(socket.id);
+      
+      if (!participantInfo) return;
+      
+      const meeting = meetings.get(participantInfo.meetingId);
+      if (!meeting || !meeting.canPerformHostAction(socket.id)) {
+        socket.emit('action-error', { message: 'Only host can rename participants' });
+        return;
+      }
+
+      // Validate name
+      if (!newName || newName.trim().length === 0 || newName.trim().length > 50) {
+        socket.emit('action-error', { message: 'Invalid name. Name must be 1-50 characters.' });
+        return;
+      }
+
+      const result = meeting.renameParticipant(targetSocketId, newName.trim());
+      if (result) {
+        // Notify all participants about the name change
+        io.to(participantInfo.meetingId).emit('participant-renamed', {
+          socketId: targetSocketId,
+          oldName: result.oldName,
+          newName: result.newName,
+          participants: Array.from(meeting.participants.values()),
+          renamedBy: meeting.participants.get(socket.id)?.name
+        });
+
+        console.log(`Host ${socket.id} renamed participant ${targetSocketId} from ${result.oldName} to ${result.newName} in meeting ${participantInfo.meetingId}`);
+      }
+    });
+
+    // New socket event for muting all participants
+    socket.on('mute-all-participants', (data) => {
+      const { muteAll } = data;
+      const participantInfo = participants.get(socket.id);
+      
+      if (!participantInfo) return;
+      
+      const meeting = meetings.get(participantInfo.meetingId);
+      if (!meeting || !meeting.canPerformHostAction(socket.id)) {
+        socket.emit('action-error', { message: 'Only host can mute all participants' });
+        return;
+      }
+
+      // Update permissions and mute participants if needed
+      meeting.updatePermissions({ muteAllParticipants: muteAll });
+
+      // Notify all participants
+      io.to(participantInfo.meetingId).emit('all-participants-muted', {
+        muteAll,
+        participants: Array.from(meeting.participants.values()),
+        permissions: meeting.getPermissions(),
+        mutedBy: meeting.participants.get(socket.id)?.name
+      });
+
+      console.log(`Host ${socket.id} ${muteAll ? 'muted' : 'unmuted'} all participants in meeting ${participantInfo.meetingId}`);
     });
 
     socket.on('disconnect', () => {
