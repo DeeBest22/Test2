@@ -1691,6 +1691,10 @@ class WebRTCManager {
       // Initialize the host meeting
       document.addEventListener('DOMContentLoaded', () => {
         new HostMeeting();
+        setupVideoControls();
+        setupParticipantActions();
+        setupReactionSystem();
+        setupSettingsModal();
       });
     
       
@@ -1725,3 +1729,173 @@ const hostParticipant = Array.from(window.hostMeetingInstance.participants.value
   const section = document.getElementById('secondaryVideosSection');
   section.style.overflowX = 'hidden';
   section.style.overflowY = 'hidden';
+
+  // Settings Modal Functions
+  function setupSettingsModal() {
+    const settingsBtn = document.getElementById('settings-btn');
+    const settingsModal = document.getElementById('settings-modal');
+    const settingsCloseBtn = document.querySelector('.settings-close-btn');
+    const displayNameInput = document.querySelector('.text-input');
+    const allowRenameToggle = document.querySelector('input[type="checkbox"]:nth-of-type(1)');
+    const allowUnmuteToggle = document.querySelector('input[type="checkbox"]:nth-of-type(2)');
+    const allowHandRaiseToggle = document.querySelector('input[type="checkbox"]:nth-of-type(3)');
+    const muteAllToggle = document.getElementById('control-mute');
+    const removeParticipantsToggle = document.getElementById('control-kick');
+    const spotlightToggle = document.getElementById('control-spotlight');
+
+    if (settingsBtn) {
+      settingsBtn.addEventListener('click', () => {
+        settingsModal.classList.add('show');
+        // Set current host name in the input
+        if (displayNameInput && currentUser) {
+          displayNameInput.value = currentUser.name || 'Host';
+        }
+      });
+    }
+
+    if (settingsCloseBtn) {
+      settingsCloseBtn.addEventListener('click', () => {
+        settingsModal.classList.remove('show');
+      });
+    }
+
+    // Close modal when clicking outside
+    if (settingsModal) {
+      settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) {
+          settingsModal.classList.remove('show');
+        }
+      });
+    }
+
+    // Host display name change
+    if (displayNameInput) {
+      displayNameInput.addEventListener('blur', () => {
+        const newName = displayNameInput.value.trim();
+        if (newName && newName !== currentUser.name) {
+          socket.emit('host-rename-self', { newName });
+        }
+      });
+
+      displayNameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          const newName = displayNameInput.value.trim();
+          if (newName && newName !== currentUser.name) {
+            socket.emit('host-rename-self', { newName });
+          }
+          displayNameInput.blur();
+        }
+      });
+    }
+
+    // Permission toggles
+    if (allowRenameToggle) {
+      allowRenameToggle.addEventListener('change', () => {
+        socket.emit('update-meeting-permissions', {
+          permissions: { allowRename: allowRenameToggle.checked }
+        });
+      });
+    }
+
+    if (allowUnmuteToggle) {
+      allowUnmuteToggle.addEventListener('change', () => {
+        socket.emit('update-meeting-permissions', {
+          permissions: { allowUnmute: allowUnmuteToggle.checked }
+        });
+      });
+    }
+
+    if (allowHandRaiseToggle) {
+      allowHandRaiseToggle.addEventListener('change', () => {
+        socket.emit('update-meeting-permissions', {
+          permissions: { allowHandRaising: allowHandRaiseToggle.checked }
+        });
+      });
+    }
+
+    // Host controls
+    if (muteAllToggle) {
+      muteAllToggle.addEventListener('change', () => {
+        socket.emit('mute-all-participants', { muteAll: muteAllToggle.checked });
+      });
+    }
+
+    if (removeParticipantsToggle) {
+      removeParticipantsToggle.addEventListener('change', () => {
+        // This could be used for future functionality
+        console.log('Remove participants toggle:', removeParticipantsToggle.checked);
+      });
+    }
+
+    if (spotlightToggle) {
+      spotlightToggle.addEventListener('change', () => {
+        // This could be used for future functionality
+        console.log('Spotlight toggle:', spotlightToggle.checked);
+      });
+    }
+  }
+
+  // Socket event handlers
+  socket.on('participant-joined', (data) => {
+    console.log('Participant joined:', data);
+    participants = data.participants;
+    updateParticipantsList();
+  });
+
+  socket.on('meeting-permissions-updated', (data) => {
+    console.log('Meeting permissions updated:', data.permissions);
+    showToast(`Meeting permissions updated by ${data.changedBy}`, 'info');
+    
+    // Update toggle states in settings modal
+    const allowRenameToggle = document.querySelector('input[type="checkbox"]:nth-of-type(1)');
+    const allowUnmuteToggle = document.querySelector('input[type="checkbox"]:nth-of-type(2)');
+    const allowHandRaiseToggle = document.querySelector('input[type="checkbox"]:nth-of-type(3)');
+    const muteAllToggle = document.getElementById('control-mute');
+
+    if (allowRenameToggle) allowRenameToggle.checked = data.permissions.allowRename;
+    if (allowUnmuteToggle) allowUnmuteToggle.checked = data.permissions.allowUnmute;
+    if (allowHandRaiseToggle) allowHandRaiseToggle.checked = data.permissions.allowHandRaising;
+    if (muteAllToggle) muteAllToggle.checked = data.permissions.muteAllParticipants;
+
+    // Update participants list to reflect new states
+    participants = data.participants;
+    updateParticipantsList();
+  });
+
+  socket.on('all-participants-muted', (data) => {
+    console.log('All participants muted:', data.muteAll);
+    showToast(`All participants ${data.muteAll ? 'muted' : 'unmuted'} by ${data.mutedBy}`, 'info');
+    
+    participants = data.participants;
+    updateParticipantsList();
+  });
+
+  socket.on('participant-renamed', (data) => {
+    console.log('Participant renamed:', data);
+    
+    // Update participant in our list
+    const participant = participants.find(p => p.socketId === data.socketId);
+    if (participant) {
+      participant.name = data.newName;
+    }
+    
+    // If it's the host renaming themselves, update current user
+    if (data.isHost && data.socketId === socket.id) {
+      currentUser.name = data.newName;
+      // Update meeting title
+      const meetingTitle = document.querySelector('.meeting-title');
+      if (meetingTitle) {
+        meetingTitle.textContent = `Meeting hosted by ${data.newName}`;
+      }
+    }
+    
+    updateParticipantsList();
+    
+    if (data.renamedBy) {
+      showToast(`${data.oldName} renamed to ${data.newName} by ${data.renamedBy}`, 'info');
+    } else {
+      showToast(`${data.oldName} renamed to ${data.newName}`, 'info');
+    }
+  });
+
+  socket.on('participant-muted', (data) => {

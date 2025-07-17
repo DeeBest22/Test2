@@ -142,6 +142,9 @@
             <i class="fas fa-phone-slash"></i>
           </button>
         </div>
+          <button class="control-btn" id="settings-btn" title="Settings">
+            <i class="fas fa-cog"></i>
+          </button>
         
         <div class="taskbar-right">
            <button style="margin-right: 10px;" class="control-btn" id="vortex-primary-activator-3k7s" title="Lock/Unlock Meeting">
@@ -1193,6 +1196,64 @@
       <div class="modalForSettings-footer">
         <button id="reset-settings" class="secondary-btn">Reset All</button>
         <button id="save-settings" class="primary-btn">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="settings-modal" id="settings-modal">
+    <div class="settings-modal-content">
+      <div class="settings-modal-header">
+        <h3>Meeting Settings</h3>
+        <button class="settings-close-btn">&times;</button>
+      </div>
+      
+      <div class="settings-section">
+        <div class="settings-section-title">General Settings</div>
+        <div class="setting-group-settings">
+          <div class="setting-item">
+            <span>Display Name</span>
+            <input type="text" value="Your Name" class="text-input">
+          </div>
+          <div class="setting-item">
+            <span>Allow participants to rename themselves</span>
+            <label class="toggle">
+              <input type="checkbox" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="setting-item">
+            <span>Allow participants to unmute themselves</span>
+            <label class="toggle">
+              <input type="checkbox" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="setting-item">
+            <span>Allow hand raising</span>
+            <label class="toggle">
+              <input type="checkbox" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="setting-item">
+            <span>Host controls</span>
+            <div class="controls-list">
+              <div class="control-item">
+                <input type="checkbox" id="control-mute">
+                <label for="control-mute">Mute all participants</label>
+              </div>
+              <div class="control-item">
+                <input type="checkbox" id="control-kick">
+                <label for="control-kick">Remove participants</label>
+              </div>
+              <div class="control-item">
+                <input type="checkbox" id="control-spotlight">
+                <label for="control-spotlight">Spotlight video</label>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

@@ -645,6 +645,11 @@ class WebRTCManager {
             this.spotlightedParticipant = data.spotlightedParticipant;
             this.updateMeetingTitle();
             this.updateRaisedHands(data.raisedHands);
+            
+            // Update rename button visibility based on permissions
+            if (data.permissions) {
+              this.updateRenameButtonVisibility(data.permissions);
+            }
           });
 
           this.socket.on('participant-joined', (data) => {
@@ -722,6 +727,68 @@ class WebRTCManager {
             this.showToast(data.message, 'error');
           });
 
+          this.socket.on('meeting-permissions-updated', (data) => {
+            console.log('Meeting permissions updated:', data.permissions);
+            this.showToast(`Meeting permissions updated by ${data.changedBy}`, 'info');
+            
+            // Update rename button visibility
+            this.updateRenameButtonVisibility(data.permissions);
+            
+            // Update participants list to reflect new states
+            this.participants = data.participants;
+            this.updateParticipantsList();
+          });
+
+          this.socket.on('all-participants-muted', (data) => {
+            console.log('All participants muted:', data.muteAll);
+            this.showToast(`All participants ${data.muteAll ? 'muted' : 'unmuted'} by ${data.mutedBy}`, 'info');
+            
+            // If we're muted by host, update our mic state
+            const currentParticipant = data.participants.find(p => p.socketId === this.socket.id);
+            if (currentParticipant && currentParticipant.isMuted && !this.isMuted) {
+              this.isMuted = true;
+              const micBtn = document.getElementById('micBtn');
+              if (micBtn) {
+                micBtn.setAttribute('data-active', 'false');
+                micBtn.innerHTML = '<i class="fas fa-microphone-slash"></i>';
+              }
+              
+              // Stop local audio stream
+              if (this.webrtc.localStream) {
+                const audioTrack = this.webrtc.localStream.getAudioTracks()[0];
+                if (audioTrack) {
+                  audioTrack.enabled = false;
+                }
+              }
+            }
+            
+            this.updateParticipants(data.participants);
+          });
+
+          this.socket.on('participant-renamed', (data) => {
+            console.log('Participant renamed:', data);
+            
+            // Update participant in our list
+            const participant = this.participants.get(data.socketId);
+            if (participant) {
+              participant.name = data.newName;
+            }
+            
+            // If it's us being renamed, update current user
+            if (data.socketId === this.socket.id) {
+              this.userName = data.newName;
+            }
+            
+            this.renderParticipants();
+            this.renderParticipantsList();
+            
+            if (data.renamedBy) {
+              this.showToast(`${data.oldName} renamed to ${data.newName} by ${data.renamedBy}`, 'info');
+            } else {
+              this.showToast(`${data.oldName} renamed to ${data.newName}`, 'info');
+            }
+          });
+
           // Hand raised events
           this.socket.on('hand-raised', (data) => {
             this.updateRaisedHands(data.raisedHands);
@@ -787,6 +854,83 @@ class WebRTCManager {
               this.closeParticipantsPanel();
             }
           });
+
+          this.setupRenameModal();
+        }
+
+        // Rename Modal Functions
+        setupRenameModal() {
+          const renameBtn = document.getElementById('rename-btn');
+          const renameModal = document.getElementById('rename-modal');
+          const renameCloseBtn = document.querySelector('.rename-close-btn');
+          const renameInput = document.getElementById('rename-input');
+          const renameCancelBtn = document.querySelector('.rename-btn-cancel');
+          const renameSaveBtn = document.querySelector('.rename-btn-save');
+
+          if (renameBtn) {
+            renameBtn.addEventListener('click', () => {
+              renameModal.classList.add('show');
+              if (renameInput && this.userName) {
+                renameInput.value = this.userName || '';
+                renameInput.focus();
+                renameInput.select();
+              }
+            });
+          }
+
+          if (renameCloseBtn) {
+            renameCloseBtn.addEventListener('click', () => {
+              renameModal.classList.remove('show');
+            });
+          }
+
+          if (renameCancelBtn) {
+            renameCancelBtn.addEventListener('click', () => {
+              renameModal.classList.remove('show');
+            });
+          }
+
+          if (renameSaveBtn) {
+            renameSaveBtn.addEventListener('click', () => {
+              const newName = renameInput.value.trim();
+              if (newName && newName !== this.userName) {
+                this.socket.emit('rename-participant', { newName });
+                renameModal.classList.remove('show');
+              }
+            });
+          }
+
+          if (renameInput) {
+            renameInput.addEventListener('keypress', (e) => {
+              if (e.key === 'Enter') {
+                const newName = renameInput.value.trim();
+                if (newName && newName !== this.userName) {
+                  this.socket.emit('rename-participant', { newName });
+                  renameModal.classList.remove('show');
+                }
+              }
+            });
+          }
+
+          // Close modal when clicking outside
+          if (renameModal) {
+            renameModal.addEventListener('click', (e) => {
+              if (e.target === renameModal) {
+                renameModal.classList.remove('show');
+              }
+            });
+          }
+        }
+
+        updateRenameButtonVisibility(permissions) {
+          const renameBtn = document.getElementById('rename-btn');
+          if (renameBtn) {
+            if (permissions && permissions.allowRename) {
+              renameBtn.style.display = 'flex';
+            } else {
+              renameBtn.style.display = 'none';
+            }
+          }
         }
 
         updateRaisedHands(raisedHands) {
