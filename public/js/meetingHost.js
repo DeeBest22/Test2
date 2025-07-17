@@ -1,5 +1,4 @@
-
-      class WebRTCManager {
+class WebRTCManager {
         constructor(socket) {
           this.socket = socket;
           this.localStream = null;
@@ -419,7 +418,11 @@
           this.meetingPermissions = {
             chatEnabled: true,
             fileSharing: true,
-            emojiReactions: true
+            emojiReactions: true,
+            allowRename: true,
+            allowUnmute: true,
+            allowHandRaising: true,
+            muteAllParticipants: false
           };
           
         this.init().then(() => {
@@ -571,6 +574,35 @@
             this.meetingPermissions = data.permissions;
             this.showToast(`Meeting permissions updated by ${data.changedBy}`);
           });
+
+          this.socket.on('participant-renamed', (data) => {
+            this.updateParticipants(data.participants);
+            
+            // Update local participant reference if it's the host
+            if (data.socketId === this.socket.id) {
+              const localParticipant = this.participants.get(this.socket.id);
+              if (localParticipant) {
+                this.userName = localParticipant.name;
+              }
+            }
+            
+            const renamedBy = data.renamedBy ? ` by ${data.renamedBy}` : '';
+            const hostIndicator = data.isHost ? ' (Host)' : '';
+            this.showToast(`${data.oldName} renamed to ${data.newName}${hostIndicator}${renamedBy}`, 'info');
+          });
+
+          this.socket.on('all-participants-muted', (data) => {
+            this.updateParticipants(data.participants);
+            this.meetingPermissions = data.permissions;
+            
+            const action = data.muteAll ? 'muted' : 'unmuted';
+            this.showToast(`All participants ${action} by ${data.mutedBy}`, 'info');
+          });
+
+          this.socket.on('meeting-lock-changed', (data) => {
+            const status = data.isLocked ? 'locked' : 'unlocked';
+            this.showToast(`Meeting ${status} by ${data.changedBy}`, 'info');
+          });
         }
 
         setupEventListeners() {
@@ -649,6 +681,39 @@
             const joinUrl = `${window.location.origin}/join/${this.meetingId}`;
             this.copyToClipboard(joinUrl);
           });
+
+          // Settings modal events
+          const settingsBtn = document.getElementById('settingsBtn');
+          const settingsModal = document.getElementById('settingsModal');
+          const settingsCloseBtn = document.getElementById('settingsCloseBtn');
+          const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+
+          if (settingsBtn) {
+            settingsBtn.addEventListener('click', () => {
+              this.openSettingsModal();
+            });
+          }
+
+          if (settingsCloseBtn) {
+            settingsCloseBtn.addEventListener('click', () => {
+              this.closeSettingsModal();
+            });
+          }
+
+          if (saveSettingsBtn) {
+            saveSettingsBtn.addEventListener('click', () => {
+              this.saveSettings();
+            });
+          }
+
+          // Close settings modal when clicking outside
+          if (settingsModal) {
+            settingsModal.addEventListener('click', (e) => {
+              if (e.target === settingsModal) {
+                this.closeSettingsModal();
+              }
+            });
+          }
 
           // Close participants panel when clicking outside
           document.addEventListener('click', (e) => {
@@ -882,6 +947,9 @@
               options.push('<button data-action="kick" class="danger"><i class="fas fa-user-times"></i> Remove</button>');
             }
           }
+
+          // Add rename option for host
+          options.push('<button data-action="rename"><i class="fas fa-edit"></i> Rename</button>');
           
           return options.join('');
         }
@@ -1203,6 +1271,9 @@
               options.push('<button data-action="kick">Remove from Meeting</button>');
             }
           }
+
+          // Add rename option for host
+          options.push('<button data-action="rename">✏️ Rename</button>');
           
           return options.join('');
         }
@@ -1243,6 +1314,9 @@
             case 'kick':
               this.kickParticipant(socketId);
               break;
+            case 'rename':
+              this.renameParticipant(socketId);
+              break;
           }
         }
 
@@ -1267,6 +1341,30 @@
           if (participant && confirm(`Remove ${participant.name} from the meeting?`)) {
             this.socket.emit('kick-participant', { targetSocketId: socketId });
           }
+        }
+
+        renameParticipant(socketId) {
+          const participant = this.participants.get(socketId);
+          if (!participant) return;
+          
+          const newName = prompt(`Rename ${participant.name}:`, participant.name);
+          if (newName && newName.trim() && newName.trim() !== participant.name) {
+            if (socketId === this.socket.id) {
+              // Host renaming themselves
+              this.socket.emit('host-rename-self', { newName: newName.trim() });
+            } else {
+              // Host renaming another participant
+              this.socket.emit('host-rename-participant', { 
+                targetSocketId: socketId, 
+                newName: newName.trim() 
+              });
+            }
+          }
+        }
+
+        toggleMuteAllParticipants() {
+          const muteAll = !this.meetingPermissions.muteAllParticipants;
+          this.socket.emit('mute-all-participants', { muteAll });
         }
 
         handleSpotlightChange(spotlightedSocketId) {
@@ -1451,7 +1549,10 @@
         }
 
         updateMeetingTitle() {
-          document.getElementById('meetingTitle').textContent = `Meeting ${this.meetingId}`;
+          const localParticipant = this.participants.get(this.socket.id);
+          if (localParticipant) {
+            document.getElementById('meetingTitle').textContent = `${localParticipant.name}'s Meeting`;
+          }
         }
 
         updateTime() {
@@ -1483,6 +1584,79 @@
           }).catch(() => {
             this.showToast('Failed to copy', 'error');
           });
+        }
+
+        openSettingsModal() {
+          const settingsModal = document.getElementById('settingsModal');
+          const hostDisplayNameInput = document.getElementById('hostDisplayName');
+          const allowRenameToggle = document.getElementById('allowRename');
+          const allowUnmuteToggle = document.getElementById('allowUnmute');
+          const allowHandRaisingToggle = document.getElementById('allowHandRaising');
+          const muteAllParticipantsToggle = document.getElementById('muteAllParticipants');
+
+          if (settingsModal) {
+            settingsModal.classList.add('show');
+          }
+          
+          // Set current host name
+          const localParticipant = this.participants.get(this.socket.id);
+          if (localParticipant && hostDisplayNameInput) {
+            hostDisplayNameInput.value = localParticipant.name || '';
+          }
+          
+          // Set current permission states
+          if (allowRenameToggle) {
+            allowRenameToggle.checked = this.meetingPermissions.allowRename;
+          }
+          if (allowUnmuteToggle) {
+            allowUnmuteToggle.checked = this.meetingPermissions.allowUnmute;
+          }
+          if (allowHandRaisingToggle) {
+            allowHandRaisingToggle.checked = this.meetingPermissions.allowHandRaising;
+          }
+          if (muteAllParticipantsToggle) {
+            muteAllParticipantsToggle.checked = this.meetingPermissions.muteAllParticipants;
+          }
+        }
+
+        closeSettingsModal() {
+          const settingsModal = document.getElementById('settingsModal');
+          if (settingsModal) {
+            settingsModal.classList.remove('show');
+          }
+        }
+
+        saveSettings() {
+          const hostDisplayNameInput = document.getElementById('hostDisplayName');
+          const allowRenameToggle = document.getElementById('allowRename');
+          const allowUnmuteToggle = document.getElementById('allowUnmute');
+          const allowHandRaisingToggle = document.getElementById('allowHandRaising');
+          const muteAllParticipantsToggle = document.getElementById('muteAllParticipants');
+
+          const localParticipant = this.participants.get(this.socket.id);
+          const newHostName = hostDisplayNameInput ? hostDisplayNameInput.value.trim() : '';
+          
+          // Update host name if changed
+          if (newHostName && newHostName !== localParticipant?.name) {
+            this.socket.emit('host-rename-self', { newName: newHostName });
+          }
+          
+          // Update permissions
+          const newPermissions = {
+            allowRename: allowRenameToggle ? allowRenameToggle.checked : this.meetingPermissions.allowRename,
+            allowUnmute: allowUnmuteToggle ? allowUnmuteToggle.checked : this.meetingPermissions.allowUnmute,
+            allowHandRaising: allowHandRaisingToggle ? allowHandRaisingToggle.checked : this.meetingPermissions.allowHandRaising,
+            muteAllParticipants: muteAllParticipantsToggle ? muteAllParticipantsToggle.checked : this.meetingPermissions.muteAllParticipants
+          };
+          
+          // Only emit if permissions changed
+          if (JSON.stringify(newPermissions) !== JSON.stringify(this.meetingPermissions)) {
+            this.socket.emit('update-meeting-permissions', { permissions: newPermissions });
+            this.meetingPermissions = { ...newPermissions };
+          }
+          
+          this.closeSettingsModal();
+          this.showToast('Settings saved successfully', 'success');
         }
 
         showToast(message, type = 'success') {
@@ -1551,4 +1725,3 @@ const hostParticipant = Array.from(window.hostMeetingInstance.participants.value
   const section = document.getElementById('secondaryVideosSection');
   section.style.overflowX = 'hidden';
   section.style.overflowY = 'hidden';
-
