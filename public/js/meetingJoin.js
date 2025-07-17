@@ -1,5 +1,4 @@
-
-      class WebRTCManager {
+class WebRTCManager {
         constructor(socket) {
           this.socket = socket;
           this.localStream = null;
